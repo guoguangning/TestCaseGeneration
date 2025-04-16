@@ -1,0 +1,16 @@
+paddleocr==2.10.0
+paddlepaddle==3.0.0
+pandas==2.2.3
+PyPDF2==3.0.1
+PyQt5==5.15.11
+python-docx==1.1.2
+openpyxl==3.1.5
+opencv-python==4.11.0.86
+Markdown==3.7
+lxml==5.3.1
+ollama==0.4.7
+PyYAML==6.0.2
+nltk==3.9.1
+openai==1.65.1
+numpy~=2.2.4
+tabulate==0.9.0
