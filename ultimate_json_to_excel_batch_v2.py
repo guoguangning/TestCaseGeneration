@@ -112,7 +112,7 @@ def extract_tags(title):
 def transform_data(json_data, md_file_path):
     """转换数据为指定格式（增强容错性）"""
     transformed = []
-    md_filename = os.path.basename(md_file_path).replace('.md', '')
+    md_filename = os.path.basename(md_file_path).replace('.md', '').replace('-', '|')
 
     if not isinstance(json_data, list):
         json_data = [json_data]
@@ -123,9 +123,14 @@ def transform_data(json_data, md_file_path):
 
         # 处理预期结果（兼容字符串/列表/字典）
         expected_result = item.get("预期结果", "")
-        if isinstance(expected_result, (list, dict)):
+        if isinstance(expected_result, list):
+            # 如果是列表，转换为字符串并去掉方括号
+            expected_result = ", ".join(str(x) for x in expected_result)
+        elif isinstance(expected_result, dict):
+            # 如果是字典，转换为JSON字符串
             expected_result = json.dumps(expected_result, ensure_ascii=False)
         elif not isinstance(expected_result, str):
+            # 其他类型转为字符串
             expected_result = str(expected_result)
 
         # 处理操作步骤（确保是列表）
