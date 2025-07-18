@@ -95,8 +95,9 @@ class GenerateThread(QThread):
         self.api_key = self._load_api_key()
         self.base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
         self.model = "deepseek-r1"
-    
-    def _load_api_key(self):
+
+    @staticmethod
+    def _load_api_key():
         """
         从配置文件加载API密钥
         
@@ -119,7 +120,7 @@ class GenerateThread(QThread):
                         print("警告: API密钥为空，将使用默认值")
         except Exception as e:
             print(f"加载API配置失败: {e}")
-        
+
         # 使用默认配置（这不是一个好的做法，应当仅用于开发阶段）
         return 'sk-58335f1c890445ca9306e8a25f1e15c5'  # 仅作为示例
 
@@ -148,13 +149,13 @@ class GenerateThread(QThread):
             api_key=self.api_key,
             base_url=self.base_url
         )
-        
+
         # 优化上下文处理
         max_context_len = 15000  # 模型能处理的最大上下文长度
         if len(self.context) > max_context_len:
             print(f"上下文过长({len(self.context)}字符)，将截断至{max_context_len}字符")
             self.context = self.context[:max_context_len] + "...[内容已截断]"
-            
+
         reasoning_content = ""  # 定义完整思考过程
         answer_content = ""  # 定义完整回复
         is_answering = False  # 判断是否结束思考过程并开始回复
@@ -162,21 +163,21 @@ class GenerateThread(QThread):
         try:
             # 构建用户消息
             user_message = {
-                'role': 'user', 
+                'role': 'user',
                 'content': f'所在行业: {self.job_area}；'
-                          f'文档内容： {self.context}； '
-                          f'生成的用例类型： {self.func_type}； '
-                          f'用例设计方法： {self.design_method}； '
-                          f'提示词：{self.prompt}'
+                           f'文档内容： {self.context}； '
+                           f'生成的用例类型： {self.func_type}； '
+                           f'用例设计方法： {self.design_method}； '
+                           f'提示词：{self.prompt}'
             }
-            
+
             # 创建聊天完成请求
             completion = client.chat.completions.create(
                 model=self.model,
                 messages=[user_message],
                 stream=True  # 启用流式响应，实时获取生成内容
             )
-            
+
             print("\n" + "=" * 20 + "思考过程" + "=" * 20 + "\n")
             for chunk in completion:
                 # 处理空选择的情况（如使用情况统计）
@@ -185,17 +186,17 @@ class GenerateThread(QThread):
                         print("\nUsage:")
                         print(chunk.usage)
                     continue
-                
+
                 # 处理有选择的情况
                 delta = chunk.choices[0].delta
-                
+
                 # 处理思考过程
                 if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
                     print(delta.reasoning_content, end='', flush=True)
                     reasoning_content += delta.reasoning_content
                     self.progress.emit("正在分析需求...")
                     continue
-                
+
                 # 处理回复内容
                 if hasattr(delta, 'content') and delta.content:
                     # 标记回复开始
@@ -203,18 +204,19 @@ class GenerateThread(QThread):
                         print("\n" + "=" * 20 + "完整回复" + "=" * 20 + "\n")
                         is_answering = True
                         self.progress.emit("正在生成用例...")
-                    
+
                     # 输出回复内容
                     print(delta.content, end='', flush=True)
                     answer_content += delta.content
-            
+
             return answer_content
         except Exception as e:
             error_msg = f"API调用出错: {str(e)}"
             print(error_msg)
             raise Exception(error_msg)
 
-    def _extract_json(self, result):
+    @staticmethod
+    def _extract_json(result):
         """
         提取并处理JSON格式的结果
         
@@ -237,7 +239,7 @@ class GenerateThread(QThread):
                 return json_str
             except json.JSONDecodeError:
                 print("提取的JSON格式无效，尝试其他方法")
-                
+
         # 如果没有找到或不是有效JSON，尝试在整个文本中查找有效JSON数组
         if result.strip().startswith("[") and result.strip().endswith("]"):
             try:
@@ -245,7 +247,7 @@ class GenerateThread(QThread):
                 return result.strip()
             except json.JSONDecodeError:
                 print("文本中的JSON格式无效，返回原始结果")
-                
+
         # 如果都失败了，返回原始结果
         return result
 
@@ -259,11 +261,11 @@ class GenerateThread(QThread):
         try:
             # 生成测试用例
             result = self.generate_cases()
-            
+
             # 尝试提取JSON内容并处理
             if 'json' in result.lower() or (result.strip().startswith("[") and result.strip().endswith("]")):
                 result = self._extract_json(result)
-                
+
             # 发送完成信号
             self.finished.emit(result)
         except Exception as e:
@@ -323,10 +325,11 @@ class DeepSeekTool(QMainWindow):
         # 正文部分精准匹配过滤
         self.content_filter_exact = ["需求规格说明书",
                                      "版本记录",
-                                     "细项类别只能选填"业务数据"或"业务功能"；",
-                                     "业务数据的细项名称只能以"信息"、"数据"、"配置"或类似名词为后缀；",
-                                     "业务功能的细项名称只能以"信息的管理"、"数据的增删改查"、"配置的维护"等有对象的动词为后缀，新增、删除、查询、修改可单列为一个细项；",
-                                     "变化说明一般选"新增"、"已有但需修改"，确实没有变化的业务数据或业务功能，可填无变化，也可不填写该细项；",
+                                     "细项类别只能选填'业务数据'或'业务功能'；",
+                                     "业务数据的细项名称只能以'信息'、'数据'、'配置'或类似名词为后缀；",
+                                     "业务功能的细项名称只能以'信息的管理'、'数据的增删改查'、'配置的维护'等有对象的动词为后缀，新增、删除、查询、修改可单列为一个细项；",
+                                     "变化说明一般选'新增'、'已有但需修改'"
+                                     "，确实没有变化的业务数据或业务功能，可填无变化，也可不填写该细项；",
                                      "备注用做补充说明，按需填写即可；",
                                      "接口功能和批处理功能在相应章节描述即可，不需要在此填写】"]  # 包含的正文部分过滤掉，使用==运算符
         self.clean_flag = ["需求规格说明书", ]
@@ -477,7 +480,7 @@ class DeepSeekTool(QMainWindow):
                                   "            \"4. 确认支付金额为100-1000元人民币\",\n"
                                   "            \"5. 点击支付按钮\"\n"
                                   "        ],\n"
-                                  "        \"预期结果\": \"支付成功，页面显示支付完成信息，余额扣减正确\",\n"
+                                  "        \"预期结果\": [\"支付成功，页面显示支付完成信息，余额扣减正确\"],\n"
                                   "        \"优先级\": \"P1\"\n"
                                   "    }\n"
                                   "]\n\n"
@@ -788,7 +791,7 @@ Rules:
                 "4. 确认支付金额为100-1000元人民币",
                 "5. 点击支付按钮"
             ],
-            "预期结果": "支付成功，页面显示支付完成信息，余额扣减正确",
+            "预期结果": ["支付成功，页面显示支付完成信息，余额扣减正确"],
             "优先级": "P1"
         }
     ]""",
@@ -809,7 +812,7 @@ Rules:
                 "4. 在邮箱字段输入有效邮箱地址",
                 "5. 点击提交按钮"
             ],
-            "预期结果": "系统提示注册成功",
+            "预期结果": ["系统提示注册成功"],
             "优先级": "P1"
         },
         {
@@ -828,7 +831,7 @@ Rules:
                 "4. 在邮箱字段输入有效邮箱地址",
                 "5. 点击提交按钮"
             ],
-            "预期结果": "系统提示用户名长度超限",
+            "预期结果": ["系统提示用户名长度超限"],
             "优先级": "P2"
         }
     ]""",
@@ -847,7 +850,7 @@ Rules:
                 "3. 输入密码为correct_password",
                 "4. 点击登录按钮"
             ],
-            "预期结果": "登录成功，跳转到首页",
+            "预期结果": ["登录成功，跳转到首页"],
             "优先级": "P1"
         },
         {
@@ -864,7 +867,7 @@ Rules:
                 "3. 输入密码为random_password",
                 "4. 点击登录按钮"
             ],
-            "预期结果": "登录失败，提示用户名或密码错误",
+            "预期结果": ["登录失败，提示用户名或密码错误"],
             "优先级": "P1"
         }
     ]""",
@@ -882,7 +885,7 @@ Rules:
                 "2. 系统执行支付操作",
                 "3. 支付成功后更新订单状态"
             ],
-            "预期结果": "订单状态从'已创建'变为'已支付'",
+            "预期结果": ["订单状态从'已创建'变为'已支付'"],
             "优先级": "P1"
         },
         {
@@ -897,7 +900,7 @@ Rules:
                 "1. 用户尝试付款已取消的订单",
                 "2. 系统拦截付款请求"
             ],
-            "预期结果": "操作失败，提示订单已取消，无法付款",
+            "预期结果": ["操作失败，提示订单已取消，无法付款"],
             "优先级": "P2"
         }
     ]""",
@@ -915,7 +918,7 @@ Rules:
                 "2. 添加商品到购物车，消费金额为500元",
                 "3. 点击结算按钮"
             ],
-            "预期结果": "系统计算折扣，实际支付金额为450元",
+            "预期结果": ["系统计算折扣，实际支付金额为450元"],
             "优先级": "P1"
         }
     ]""",
@@ -932,7 +935,7 @@ Rules:
                 "1. 用户选择一个exe文件",
                 "2. 点击上传按钮"
             ],
-            "预期结果": "系统提示不支持的文件类型，上传失败",
+            "预期结果": ["系统提示不支持的文件类型，上传失败"],
             "优先级": "P2"
         }
     ]""",
@@ -952,7 +955,7 @@ Rules:
                 "4. 选择支付方式为支付宝",
                 "5. 确认订单并付款"
             ],
-            "预期结果": "订单支付成功，显示订单详情",
+            "预期结果": ["订单支付成功，显示订单详情"],
             "优先级": "P1"
         }
     ]""",
@@ -970,7 +973,7 @@ Rules:
                 "2. 输入密码为correct_password",
                 "3. 点击登录按钮"
             ],
-            "预期结果": "登录成功，跳转到管理页面",
+            "预期结果": ["登录成功，跳转到管理页面"],
             "优先级": "P1"
         },
         {
@@ -986,7 +989,7 @@ Rules:
                 "2. 输入密码为wrong_password",
                 "3. 点击登录按钮"
             ],
-            "预期结果": "登录失败，提示用户名或密码错误",
+            "预期结果": ["登录失败，提示用户名或密码错误"],
             "优先级": "P1"
         }
     ]"""
