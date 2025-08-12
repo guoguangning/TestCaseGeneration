@@ -1,9 +1,7 @@
 import json
 import re
 import os
-import pandas as pd
 from openpyxl import Workbook
-from openpyxl.utils.dataframe import dataframe_to_rows
 
 
 def repair_json(content):
@@ -24,7 +22,7 @@ def repair_json(content):
 
     # 新增：修复双重引号包裹的嵌套JSON数组
     content = re.sub(
-        r'("\s*:\s*)"(\[[^\[\]]*\])"',
+        r'("\s*:\s*)"(\[[^\[\]]*])"',
         lambda m: f'{m.group(1)}{m.group(2)}',
         content,
         flags=re.DOTALL
@@ -57,7 +55,7 @@ def extract_json_from_md(md_file_path):
                 content = f.read()
 
             # 更灵活的JSON部分匹配
-            json_match = re.search(r'(?s)\[\s*{.*}\s*\]', content) or \
+            json_match = re.search(r'(?s)\[\s*{.*}\s*]', content) or \
                          re.search(r'(?s){\s*".*"\s*}', content)
 
             if not json_match:
@@ -93,7 +91,7 @@ def extract_tags(title):
     """从标题中提取标签（[]中的内容）"""
     if not title or not isinstance(title, str):
         return ""
-    tags = re.findall(r'\[(.*?)\]', title)
+    tags = re.findall(r'\[(.*?)]', title)
     return ", ".join(tags) if tags else ""
 
 
@@ -165,7 +163,7 @@ def save_to_excel(data, excel_file_path):
             row = [item.get(header, "") for header in headers]
             ws.append(row)
 
-        # 自动调整列宽（限制最大50字符）
+        # 自动调整列宽（限制最大 50 字符）
         for col in ws.columns:
             max_len = max(
                 (len(str(cell.value)) for cell in col),
@@ -183,67 +181,83 @@ def save_to_excel(data, excel_file_path):
         return False
 
 
-def process_md_folder(input_folder, output_folder):
+def process_md_file(md_file_path, output_folder):
+    """处理单个Markdown文件"""
+    print(f"\n📄 正在处理: {os.path.basename(md_file_path)}")
+    try:
+        json_data = extract_json_from_md(md_file_path)
+        if json_data:
+            excel_filename = f"{os.path.splitext(os.path.basename(md_file_path))[0]}.xlsx"
+            excel_file_path = os.path.join(output_folder, excel_filename)
+
+            transformed_data = transform_data(json_data, md_file_path)
+            if save_to_excel(transformed_data, excel_file_path):
+                return True
+            else:
+                return False
+        else:
+            print(f"⚠️ 跳过文件（无有效JSON数据）")
+            return False
+    except Exception as e:
+        print(f"🔴 处理失败: {str(e)}")
+        return False
+
+
+def process_md_folder(input_path, output_folder):
     """
-    处理文件夹中的所有Markdown文件
-    :param input_folder: 输入文件夹路径
+    处理输入路径（文件或文件夹）
+    :param input_path: 输入文件或文件夹路径
     :param output_folder: 输出文件夹路径
     """
-    if not os.path.exists(input_folder):
-        raise ValueError(f"输入文件夹不存在: {input_folder}")
+    if not os.path.exists(input_path):
+        raise ValueError(f"输入路径不存在: {input_path}")
 
     os.makedirs(output_folder, exist_ok=True)
     processed_files = 0
     failed_files = 0
 
-    print(f"\n🔧 开始处理文件夹: {input_folder}")
-    for filename in sorted(os.listdir(input_folder)):
-        if not filename.lower().endswith('.md'):
-            continue
+    if os.path.isfile(input_path):
+        # 处理单个文件
+        print(f"\n🔧 开始处理文件: {input_path}")
+        if process_md_file(input_path, output_folder):
+            processed_files += 1
+        else:
+            failed_files += 1
+    else:
+        # 处理文件夹
+        print(f"\n🔧 开始处理文件夹: {input_path}")
+        for filename in sorted(os.listdir(input_path)):
+            if not filename.lower().endswith('.md'):
+                continue
 
-        md_file = os.path.join(input_folder, filename)
-        excel_file = os.path.join(output_folder, f"{os.path.splitext(filename)[0]}.xlsx")
-
-        print(f"\n📄 正在处理: {filename}")
-        try:
-            json_data = extract_json_from_md(md_file)
-            if json_data:
-                transformed_data = transform_data(json_data, md_file)
-                if save_to_excel(transformed_data, excel_file):
-                    processed_files += 1
-                else:
-                    failed_files += 1
+            md_file = os.path.join(input_path, filename)
+            if process_md_file(md_file, output_folder):
+                processed_files += 1
             else:
                 failed_files += 1
-                print(f"⚠️ 跳过文件（无有效JSON数据）")
-        except Exception as e:
-            failed_files += 1
-            print(f"🔴 处理失败: {str(e)}")
-            continue
 
     print(f"\n🎉 处理完成！成功: {processed_files} 个, 失败: {failed_files} 个")
     return processed_files
 
 
 if __name__ == "__main__":
-    # 配置输入输出路径
-    INPUT_FOLDER = r"C:\Users\Administrator\Desktop\滨州消防\测试用例\消防查验\费用核实和已交费功能优化"
-    OUTPUT_FOLDER = r"C:\Users\Administrator\Desktop\滨州消防\测试用例\消防查验\费用核实和已交费功能优化\Excel输出"
-
     print("=" * 50)
     print("Markdown测试用例转换工具".center(40))
     print("=" * 50)
 
+    # 配置输入输出路径
+    INPUT_PATH = r"C:\Users\Administrator\Desktop\滨州消防\测试用例\消防查验\费用核实和已交费功能优化\费用核实和已交费功能优化.md"
+    OUTPUT_FOLDER = r"C:\Users\Administrator\Desktop\滨州消防\测试用例\消防查验\费用核实和已交费功能优化\Excel输出"
+
     try:
-        success_count = process_md_folder(INPUT_FOLDER, OUTPUT_FOLDER)
+        success_count = process_md_folder(INPUT_PATH, OUTPUT_FOLDER)
         if success_count == 0:
             print("\n⚠️ 警告：没有成功转换任何文件！")
             print("可能原因：")
-            print("1. 输入文件夹中没有.md文件")
+            print("1. 输入路径中没有.md文件")
             print("2. 所有文件都包含格式错误的JSON")
             print("3. 文件编码不被支持")
     except Exception as e:
         print(f"\n🔴 程序运行出错: {str(e)}")
     finally:
         input("\n按Enter键退出...")
-
