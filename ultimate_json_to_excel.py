@@ -7,12 +7,43 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 
 
 def repair_json(content):
-    """修复JSON中的常见格式问题"""
+    """
+    增强版JSON修复函数 - 特别加强嵌套对象处理
+    """
+    # 基础修复
     content = content.replace('\\"', '"')
-    content = re.sub(r'"预期结果":\s*"([^"]+)"\s*,\s*"([^"]+)"', r'"预期结果": ["\1", "\2"]', content)
-    content = re.sub(r'"测试数据":\s*{([^}]+)}', lambda m: '"测试数据": {' + m.group(1) + '}', content)
-    content = re.sub(r'([{,]\s*)([a-zA-Z\u4e00-\u9fa5][^:\s]*)(\s*:)', r'\1"\2"\3', content)
     content = content.replace('“', '"').replace('”', '"')
+
+    # 新增：修复双重引号包裹的嵌套JSON对象（加强版）
+    content = re.sub(
+        r'("\s*:\s*)"({[^{}]*})"',
+        lambda m: f'{m.group(1)}{m.group(2)}',
+        content,
+        flags=re.DOTALL
+    )
+
+    # 新增：修复双重引号包裹的嵌套JSON数组
+    content = re.sub(
+        r'("\s*:\s*)"(\[[^\[\]]*\])"',
+        lambda m: f'{m.group(1)}{m.group(2)}',
+        content,
+        flags=re.DOTALL
+    )
+
+    # 修复未加引号的键名
+    content = re.sub(
+        r'([{,]\s*)([a-zA-Z\u4e00-\u9fa5][^:\s]*)(\s*:)',
+        r'\1"\2"\3',
+        content
+    )
+
+    # 修复JavaScript语法
+    content = re.sub(
+        r'"([^"]+)"\s*\.repeat\s*\(\s*(\d+)\s*\)',
+        lambda m: '"' + m.group(1) * int(m.group(2)) + '"',
+        content
+    )
+
     return content
 
 
@@ -117,8 +148,8 @@ def save_to_excel(data, excel_file_path):
 
 if __name__ == "__main__":
     # 输入输出文件路径
-    md_file = r"C:\Users\Administrator\Desktop\监理\测试用例\企业端-已完成列表.md"
-    excel_file = r"C:\Users\Administrator\Desktop\监理\测试用例\企业端-已完成列表.xlsx"
+    md_file = r"C:\Users\Administrator\Desktop\滨州消防\测试用例\市本级主管部门增加审批节点.md"
+    excel_file = r"C:\Users\Administrator\Desktop\滨州消防\测试用例\市本级主管部门增加审批节点.xlsx"
 
     print("开始处理文件...")
     json_data = extract_json_from_md(md_file)
