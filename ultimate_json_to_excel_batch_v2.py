@@ -8,51 +8,39 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 
 def repair_json(content):
     """
-    增强版JSON修复函数
-    修复以下常见问题：
-    1. 未转义的引号
-    2. 中文引号
-    3. 未加引号的键名
-    4. 数组中的裸字符串
-    5. JavaScript语法（如.repeat()）
-    6. 缺失的分隔符
+    增强版JSON修复函数 - 特别加强嵌套对象处理
     """
     # 基础修复
     content = content.replace('\\"', '"')
     content = content.replace('“', '"').replace('”', '"')
 
-    # 修复未加引号的键名（包括中文键名）
+    # 新增：修复双重引号包裹的嵌套JSON对象（加强版）
+    content = re.sub(
+        r'("\s*:\s*)"({[^{}]*})"',
+        lambda m: f'{m.group(1)}{m.group(2)}',
+        content,
+        flags=re.DOTALL
+    )
+
+    # 新增：修复双重引号包裹的嵌套JSON数组
+    content = re.sub(
+        r'("\s*:\s*)"(\[[^\[\]]*\])"',
+        lambda m: f'{m.group(1)}{m.group(2)}',
+        content,
+        flags=re.DOTALL
+    )
+
+    # 修复未加引号的键名
     content = re.sub(
         r'([{,]\s*)([a-zA-Z\u4e00-\u9fa5][^:\s]*)(\s*:)',
         r'\1"\2"\3',
         content
     )
 
-    # 修复数组中的裸字符串（如 "值" 变成 ["值"]）
-    content = re.sub(
-        r'("\s*:\s*)([^"\[\]\s][^,\]]*)(\s*[,\]])',
-        lambda m: f'{m.group(1)}"{m.group(2).strip()}"{m.group(3)}',
-        content
-    )
-
-    # 修复JavaScript的.repeat()语法
+    # 修复JavaScript语法
     content = re.sub(
         r'"([^"]+)"\s*\.repeat\s*\(\s*(\d+)\s*\)',
         lambda m: '"' + m.group(1) * int(m.group(2)) + '"',
-        content
-    )
-
-    # 修复缺失的分隔符（尝试自动补全）
-    content = re.sub(
-        r'("\s*:\s*)([^"{}\[\]\s][^,\n]*)(\s*\n)',
-        lambda m: f'{m.group(1)}"{m.group(2).strip()}"{m.group(3)}',
-        content
-    )
-
-    # 修复未闭合的引号（简单场景）
-    content = re.sub(
-        r'("\s*:\s*)([^"]+)(\s*[,}\]])',
-        lambda m: f'{m.group(1)}"{m.group(2).strip()}"{m.group(3)}',
         content
     )
 
@@ -239,8 +227,8 @@ def process_md_folder(input_folder, output_folder):
 
 if __name__ == "__main__":
     # 配置输入输出路径
-    INPUT_FOLDER = r"C:\Users\Administrator\Desktop\监理\测试用例"
-    OUTPUT_FOLDER = r"C:\Users\Administrator\Desktop\监理\测试用例\Excel输出"
+    INPUT_FOLDER = r"C:\Users\Administrator\Desktop\滨州消防\测试用例\消防查验\费用核实和已交费功能优化"
+    OUTPUT_FOLDER = r"C:\Users\Administrator\Desktop\滨州消防\测试用例\消防查验\费用核实和已交费功能优化\Excel输出"
 
     print("=" * 50)
     print("Markdown测试用例转换工具".center(40))
