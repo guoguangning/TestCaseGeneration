@@ -34,7 +34,7 @@ API 配置存储在 `api_config.json` 文件中，包括：
 - `model`：使用的模型名称
 
 ## 依赖项
-
+# pip install -r requirements.txt  安装包命令
 项目依赖以下 Python 库：
 - paddleocr：用于 OCR 文字识别
 - paddlepaddle：PaddleOCR 的依赖
