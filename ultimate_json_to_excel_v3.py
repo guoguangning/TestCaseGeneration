@@ -246,8 +246,8 @@ if __name__ == "__main__":
     print("=" * 50)
 
     # 配置输入输出路径
-    INPUT_PATH = r"C:\Users\Administrator\Desktop\滨州消防\测试用例\消防查验\费用核实和已交费功能优化\费用核实和已交费功能优化.md"
-    OUTPUT_FOLDER = r"C:\Users\Administrator\Desktop\滨州消防\测试用例\消防查验\费用核实和已交费功能优化\Excel输出"
+    INPUT_PATH = r"C:\Users\Administrator\Desktop\滨州消防\测试用例\消防\导入人员提示\导入人员提示.md"
+    OUTPUT_FOLDER = r"C:\Users\Administrator\Desktop\滨州消防\测试用例\消防\导入人员提示\Excel输出"
 
     try:
         success_count = process_md_folder(INPUT_PATH, OUTPUT_FOLDER)

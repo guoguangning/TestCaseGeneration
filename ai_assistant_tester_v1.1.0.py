@@ -92,37 +92,53 @@ class GenerateThread(QThread):
         self.job_area = job_area
         self.func_type = func_type
         self.design_method = design_method
-        self.api_key = self._load_api_key()
-        self.base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-        self.model = "deepseek-r1"
+        config = self._load_config()
+        self.api_key = config["api_key"]
+        self.base_url = config["base_url"]
+        self.model = config["model"]
 
     @staticmethod
-    def _load_api_key():
+    def _load_config():
         """
-        从配置文件加载API密钥
-        
-        首先尝试从api_config.json文件中加载API密钥，如果加载失败或密钥为空，
-        则使用默认密钥（仅用于开发阶段）。
-        
+        从配置文件加载API配置
+
+        首先尝试从api_config.json文件中加载配置，如果加载失败或某项配置为空，
+        则使用默认值（仅用于开发阶段）。
+
         返回:
-            str: API密钥
+            dict: 包含api_key, base_url, model的配置字典
         """
+        # 默认配置（开发阶段使用）
+        default_config = {
+            "api_key": "",
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "model": "deepseek-r1-0528"
+        }
+
         # 尝试从配置文件加载
         try:
             config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'api_config.json')
             if os.path.exists(config_path):
                 with open(config_path, 'r', encoding='utf-8') as f:
                     config = json.load(f)
-                    api_key = config.get("api_key", "")
-                    if api_key:
-                        return api_key
-                    else:
-                        print("警告: API密钥为空，将使用默认值")
+
+                    # 检查并获取每项配置
+                    for key in default_config:
+                        if key in config and config[key]:
+                            default_config[key] = config[key]
+                        else:
+                            print(f"警告: 配置项 '{key}' 为空或缺失，将使用默认值")
+
+                    return default_config
+            else:
+                print("警告: 配置文件不存在，将使用默认配置")
         except Exception as e:
             print(f"加载API配置失败: {e}")
 
+        return default_config
+
         # 使用默认配置（这不是一个好的做法，应当仅用于开发阶段）
-        return 'sk-58335f1c890445ca9306e8a25f1e15c5'  # 仅作为示例
+        # return 'sk-58335f1c890445ca9306e8a25f1e15c5'  # 仅作为示例
 
     def generate_cases(self):
         """
