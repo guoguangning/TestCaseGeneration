@@ -1582,19 +1582,258 @@ Rules:
         QApplication.restoreOverrideCursor()
 
     @staticmethod
+    def repair_json(content):
+        """
+        增强版JSON修复函数 - 特别加强嵌套对象处理
+        """
+        # 基础修复
+        content = content.replace('\\"', '"')
+        content = content.replace('"', '"').replace('"', '"')
+
+        # 新增：修复双重引号包裹的嵌套JSON对象（加强版）
+        content = re.sub(
+            r'("\s*:\s*)"({[^{}]*})"',
+            lambda m: f'{m.group(1)}{m.group(2)}',
+            content,
+            flags=re.DOTALL
+        )
+
+        # 新增：修复双重引号包裹的嵌套JSON数组
+        content = re.sub(
+            r'("\s*:\s*)"(\[[^\[\]]*])"',
+            lambda m: f'{m.group(1)}{m.group(2)}',
+            content,
+            flags=re.DOTALL
+        )
+
+        # 修复未加引号的键名
+        content = re.sub(
+            r'([{,]\s*)([a-zA-Z\u4e00-\u9fa5][^:\s]*)(\s*:)',
+            r'\1"\2"\3',
+            content
+        )
+
+        # 修复JavaScript语法
+        content = re.sub(
+            r'"([^"]+)"\s*\.repeat\s*\(\s*(\d+)\s*\)',
+            lambda m: '"' + m.group(1) * int(m.group(2)) + '"',
+            content
+        )
+
+        return content
+
+    @staticmethod
+    def extract_tags(title):
+        """从标题中提取标签（[]中的内容）"""
+        if not title or not isinstance(title, str):
+            return ""
+        tags = re.findall(r'\[(.*?)]', title)
+        return ", ".join(tags) if tags else ""
+
+    @staticmethod
+    def transform_data(json_data, file_path):
+        """转换数据为指定格式（增强容错性）"""
+        transformed = []
+        md_filename = os.path.basename(file_path).replace('.md', '').replace('-', '|')
+
+        if not isinstance(json_data, list):
+            json_data = [json_data]
+
+        for item in json_data:
+            if not isinstance(item, dict):
+                continue
+
+            # 处理预期结果（兼容字符串/列表/字典）
+            expected_result = item.get("预期结果", "")
+            if isinstance(expected_result, list):
+                # 如果是列表，转换为字符串并去掉方括号
+                expected_result = ", ".join(str(x) for x in expected_result)
+            elif isinstance(expected_result, dict):
+                # 如果是字典，转换为JSON字符串
+                expected_result = json.dumps(expected_result, ensure_ascii=False)
+            elif not isinstance(expected_result, str):
+                # 其他类型转为字符串
+                expected_result = str(expected_result)
+
+            # 处理操作步骤（确保是列表）
+            steps = item.get("操作步骤", [])
+            if not isinstance(steps, list):
+                steps = [steps] if steps else []
+
+            transformed.append({
+                "标题": item.get("用例标题", ""),
+                "目录": md_filename,
+                "负责人": item.get("负责人", "郭光宁"),
+                "前置条件": item.get("前置条件", ""),
+                "步骤描述": "\n".join([str(step) for step in steps]),
+                "预期结果": expected_result,
+                "关联需求": item.get("关联需求", ""),
+                "优先级": item.get("优先级", ""),
+                "类型": item.get("类型", "功能测试"),
+                "标签": DeepSeekTool.extract_tags(item.get("用例标题", ""))
+            })
+        return transformed
+
+    @staticmethod
+    def save_to_excel(data, excel_file_path):
+        """保存数据到Excel（增强格式处理）"""
+        if not data:
+            print(f"⚠️ 无有效数据，跳过生成 {excel_file_path}")
+            return False
+
+        try:
+            from openpyxl import Workbook
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "测试用例"
+
+            # 定义表头顺序
+            headers = [
+                "标题", "目录", "负责人", "前置条件",
+                "步骤描述", "预期结果", "关联需求",
+                "优先级", "类型", "标签"
+            ]
+            ws.append(headers)
+
+            # 写入数据
+            for item in data:
+                row = [item.get(header, "") for header in headers]
+                ws.append(row)
+
+            # 自动调整列宽（限制最大 50 字符）
+            for col in ws.columns:
+                max_len = max(
+                    (len(str(cell.value)) for cell in col),
+                    default=0
+                )
+                adjusted_width = min(max_len + 2, 50)
+                ws.column_dimensions[col[0].column_letter].width = adjusted_width
+
+            # 保存文件
+            wb.save(excel_file_path)
+            print(f"✅ Excel文件已保存: {excel_file_path}")
+            return True
+        except Exception as e:
+            print(f"🔴 保存Excel失败: {str(e)}")
+            return False
+
+    def extract_json_from_md(self, md_file_path):
+        """从Markdown中提取并修复JSON数据（增强版）"""
+        encodings = ['utf-8', 'gbk', 'gb2312', 'utf-16']
+
+        for encoding in encodings:
+            try:
+                with open(md_file_path, 'r', encoding=encoding) as f:
+                    content = f.read()
+
+                # 更灵活的JSON部分匹配
+                json_match = re.search(r'(?s)\[\s*{.*}\s*]', content) or \
+                             re.search(r'(?s){\s*".*"\s*}', content)
+
+                if not json_match:
+                    print(f"⚠️ 未在文件 {os.path.basename(md_file_path)} 中找到有效的JSON结构")
+                    return None
+
+                raw_json = json_match.group(0)
+                print(f"✅ 提取到原始JSON内容（长度: {len(raw_json)} 字符）")
+
+                # 多阶段修复
+                repaired_json = raw_json
+                for attempt in range(3):  # 最多尝试修复3次
+                    try:
+                        return json.loads(repaired_json)
+                    except json.JSONDecodeError as e:
+                        if attempt == 2:  # 最后一次尝试失败后报错
+                            error_context = repaired_json[max(0, e.pos - 50):e.pos + 50]
+                            print(f"🔴 最终修复失败 {os.path.basename(md_file_path)}:")
+                            print(f"错误类型: {e.msg}")
+                            print(f"位置: 第{e.lineno}行第{e.colno}列 (字符{e.pos})")
+                            print("错误上下文:")
+                            print("..." + error_context.replace('\n', '\\n') + "...")
+                            print("建议手动检查该部分JSON语法")
+                        repaired_json = self.repair_json(repaired_json)
+
+            except UnicodeDecodeError:
+                continue
+
+        raise ValueError(f"无法解码文件 {md_file_path}，尝试了所有支持的编码")
+
+    def process_md_file(self, md_file_path, output_folder):
+        """处理单个Markdown文件"""
+        print(f"\n📄 正在处理: {os.path.basename(md_file_path)}")
+        try:
+            json_data = self.extract_json_from_md(md_file_path)
+            if json_data:
+                excel_filename = f"{os.path.splitext(os.path.basename(md_file_path))[0]}.xlsx"
+                excel_file_path = os.path.join(output_folder, excel_filename)
+
+                transformed_data = self.transform_data(json_data, md_file_path)
+                if self.save_to_excel(transformed_data, excel_file_path):
+                    return True
+                else:
+                    return False
+            else:
+                print(f"⚠️ 跳过文件（无有效JSON数据）")
+                return False
+        except Exception as e:
+            print(f"🔴 处理失败: {str(e)}")
+            return False
+
+    def process_md_folder(self, input_path, output_folder):
+        """
+        处理输入路径（文件或文件夹）
+        :param input_path: 输入文件或文件夹路径
+        :param output_folder: 输出文件夹路径
+        """
+        if not os.path.exists(input_path):
+            raise ValueError(f"输入路径不存在: {input_path}")
+
+        os.makedirs(output_folder, exist_ok=True)
+        processed_files = 0
+        failed_files = 0
+
+        if os.path.isfile(input_path):
+            # 处理单个文件
+            print(f"\n🔧 开始处理文件: {input_path}")
+            if self.process_md_file(input_path, output_folder):
+                processed_files += 1
+            else:
+                failed_files += 1
+        else:
+            # 处理文件夹
+            print(f"\n🔧 开始处理文件夹: {input_path}")
+            for filename in sorted(os.listdir(input_path)):
+                if not filename.lower().endswith('.md'):
+                    continue
+
+                md_file = os.path.join(input_path, filename)
+                if self.process_md_file(md_file, output_folder):
+                    processed_files += 1
+                else:
+                    failed_files += 1
+
+        print(f"\n🎉 处理完成！成功: {processed_files} 个, 失败: {failed_files} 个")
+        return processed_files
+
+    @staticmethod
     def json_to_excel(json_data, output_file):
         """
-        将任意 JSON 数据中的键作为表头，值作为值，转换为 Excel 表格
+        将任意 JSON 数据中的键作为表头，值作为值，转换为 Excel 表格（增强版）
         :param json_data: JSON 数据（字符串或字典）
         :param output_file: 输出的 Excel 文件路径
         """
-        # 如果输入是 JSON 字符串，将其解析为字典
-        data_list = None
-
+        # 如果输入是 JSON 字符串，先尝试修复
         if isinstance(json_data, str):
-            json_data = json.loads(json_data)
+            # 尝试修复 JSON
+            repaired_json = DeepSeekTool.repair_json(json_data)
+            try:
+                json_data = json.loads(repaired_json)
+            except json.JSONDecodeError:
+                print("JSON 解析失败，使用原始数据")
+                json_data = repaired_json
 
         # 找到 JSON 数据中的列表部分（假设是字典中的第一个值）
+        data_list = None
         if isinstance(json_data, dict):
             for key, value in json_data.items():
                 if isinstance(value, list):  # 找到第一个值为列表的键
@@ -1606,13 +1845,12 @@ Rules:
             raise ValueError("JSON 数据中未找到列表部分！")
 
         if data_list:
-            # 将列表部分转换为 DataFrame
-            df = pd.DataFrame(data_list)
-            # 将 DataFrame 导出为 Excel 文件
-            df.to_excel(output_file, index=False)
-            print(f"Excel 文件已成功生成：{output_file}")
+            # 使用增强的保存方法
+            transformed_data = DeepSeekTool.transform_data(data_list, output_file)
+            return DeepSeekTool.save_to_excel(transformed_data, output_file)
         else:
             print("Excel 文件生成失败")
+            return False
 
     def export_result(self):
         """ 导出结果 """
