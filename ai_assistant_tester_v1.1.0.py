@@ -110,9 +110,9 @@ class GenerateThread(QThread):
         """
         # 默认配置（开发阶段使用）
         default_config = {
-            "api_key": "",
+            "api_key": "sk-58335f1c890445ca9306e8a25f1e15c5",
             "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "model": "deepseek-r1-0528"
+            "model": "deepseek-v3.2"
         }
 
         # 尝试从配置文件加载
